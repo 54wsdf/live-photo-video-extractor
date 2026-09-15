@@ -7,7 +7,8 @@ public partial class MainForm : Form
 {
     private static readonly Color DropZoneNormalColor = Color.FromArgb(247, 249, 252);
     private static readonly Color DropZoneActiveColor = Color.FromArgb(226, 239, 255);
-    private readonly BatchExtractor _batchExtractor = new(new MotionPhotoExtractor());
+    private readonly BatchExtractor _batchExtractor = new(
+        new MotionPhotoExtractor(new WindowsVideoOrientationNormalizer()));
     private bool _isProcessing;
 
     public MainForm()

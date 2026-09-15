@@ -25,6 +25,88 @@ public sealed class MotionPhotoExtractorTests
     }
 
     [Fact]
+    public async Task ExtractAsync_uses_orientation_normalized_video_when_required()
+    {
+        using var directory = new TestDirectory();
+        var rawMp4 = TestMediaFactory.MinimalMp4();
+        var normalizedMp4 = TestMediaFactory.Combine(
+            TestMediaFactory.Box("ftyp", "isom\0\0\0\0"u8.ToArray()),
+            TestMediaFactory.Box("moov", Array.Empty<byte>()),
+            TestMediaFactory.Box("mdat", new byte[] { 9, 8, 7, 6 }));
+        var sourcePath = directory.Write(
+            "landscape.jpg",
+            TestMediaFactory.JpegWithTrailer(rawMp4));
+        var normalizer = new TestOrientationNormalizer(normalizedMp4);
+        var extractor = new MotionPhotoExtractor(normalizer);
+
+        var result = await extractor.ExtractAsync(
+            sourcePath,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ExtractionStatus.Success, result.Status);
+        Assert.True(normalizer.WasCalled);
+        Assert.Contains("校正方向", result.Message);
+        Assert.Equal(
+            normalizedMp4,
+            await File.ReadAllBytesAsync(
+                Assert.IsType<string>(result.OutputPath),
+                TestContext.Current.CancellationToken));
+        Assert.DoesNotContain(
+            Directory.GetFiles(directory.Path),
+            path => Path.GetFileName(path).StartsWith(".", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExtractAsync_keeps_raw_video_when_normalizer_reports_no_rotation()
+    {
+        using var directory = new TestDirectory();
+        var rawMp4 = TestMediaFactory.MinimalMp4();
+        var sourcePath = directory.Write(
+            "portrait.jpg",
+            TestMediaFactory.JpegWithTrailer(rawMp4));
+        var normalizer = new TestOrientationNormalizer(rawMp4, normalize: false);
+        var extractor = new MotionPhotoExtractor(normalizer);
+
+        var result = await extractor.ExtractAsync(
+            sourcePath,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ExtractionStatus.Success, result.Status);
+        Assert.True(normalizer.WasCalled);
+        Assert.Contains("无损导出", result.Message);
+        Assert.Equal(
+            rawMp4,
+            await File.ReadAllBytesAsync(
+                Assert.IsType<string>(result.OutputPath),
+                TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ExtractAsync_cleans_temporary_files_after_normalization_failure()
+    {
+        using var directory = new TestDirectory();
+        var mp4 = TestMediaFactory.MinimalMp4();
+        var sourcePath = directory.Write(
+            "landscape.jpg",
+            TestMediaFactory.JpegWithTrailer(mp4));
+        var normalizer = new TestOrientationNormalizer(
+            mp4,
+            failAfterWrite: true);
+        var extractor = new MotionPhotoExtractor(normalizer);
+
+        var result = await extractor.ExtractAsync(
+            sourcePath,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ExtractionStatus.Failed, result.Status);
+        Assert.Null(result.OutputPath);
+        Assert.DoesNotContain(
+            Directory.GetFiles(directory.Path),
+            path => Path.GetFileName(path).StartsWith(".", StringComparison.Ordinal));
+        Assert.True(File.Exists(sourcePath));
+    }
+
+    [Fact]
     public async Task ExtractAsync_numbers_output_without_overwriting_existing_video()
     {
         using var directory = new TestDirectory();
@@ -162,6 +244,35 @@ public sealed class MotionPhotoExtractorTests
             {
                 Directory.Delete(Path, recursive: true);
             }
+        }
+    }
+
+    private sealed class TestOrientationNormalizer(
+        byte[] normalizedMp4,
+        bool normalize = true,
+        bool failAfterWrite = false)
+        : IVideoOrientationNormalizer
+    {
+        public bool WasCalled { get; private set; }
+
+        public async Task<bool> NormalizeIfNeededAsync(
+            string sourcePath,
+            string destinationPath,
+            CancellationToken cancellationToken)
+        {
+            WasCalled = true;
+            if (!normalize)
+            {
+                return false;
+            }
+
+            await File.WriteAllBytesAsync(destinationPath, normalizedMp4, cancellationToken);
+            if (failAfterWrite)
+            {
+                throw new InvalidDataException("Synthetic normalization failure.");
+            }
+
+            return true;
         }
     }
 }

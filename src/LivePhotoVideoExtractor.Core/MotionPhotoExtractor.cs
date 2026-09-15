@@ -12,15 +12,19 @@ public sealed class MotionPhotoExtractor
 {
     private const int CopyBufferSize = 128 * 1024;
     private readonly SegmentCopyDelegate _copySegmentAsync;
+    private readonly IVideoOrientationNormalizer? _orientationNormalizer;
 
-    public MotionPhotoExtractor()
-        : this(CopySegmentAsync)
+    public MotionPhotoExtractor(IVideoOrientationNormalizer? orientationNormalizer = null)
+        : this(CopySegmentAsync, orientationNormalizer)
     {
     }
 
-    internal MotionPhotoExtractor(SegmentCopyDelegate copySegmentAsync)
+    internal MotionPhotoExtractor(
+        SegmentCopyDelegate copySegmentAsync,
+        IVideoOrientationNormalizer? orientationNormalizer = null)
     {
         _copySegmentAsync = copySegmentAsync ?? throw new ArgumentNullException(nameof(copySegmentAsync));
+        _orientationNormalizer = orientationNormalizer;
     }
 
     public async Task<ExtractionResult> ExtractAsync(
@@ -57,6 +61,7 @@ public sealed class MotionPhotoExtractor
         }
 
         string? temporaryPath = null;
+        string? normalizedTemporaryPath = null;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -83,7 +88,7 @@ public sealed class MotionPhotoExtractor
             var baseName = Path.GetFileNameWithoutExtension(fullSourcePath);
             temporaryPath = Path.Combine(
                 directory,
-                $".{baseName}.{Guid.NewGuid():N}.livephoto.tmp");
+                $".{baseName}.{Guid.NewGuid():N}.livephoto.raw.mp4");
 
             await using (var destination = new FileStream(
                 temporaryPath,
@@ -116,6 +121,42 @@ public sealed class MotionPhotoExtractor
                 }
             }
 
+            var orientationNormalized = false;
+            if (_orientationNormalizer is not null)
+            {
+                normalizedTemporaryPath = Path.Combine(
+                    directory,
+                    $".{baseName}.{Guid.NewGuid():N}.livephoto.normalized.mp4");
+                orientationNormalized = await _orientationNormalizer.NormalizeIfNeededAsync(
+                    temporaryPath,
+                    normalizedTemporaryPath,
+                    cancellationToken).ConfigureAwait(false);
+
+                if (orientationNormalized)
+                {
+                    if (!File.Exists(normalizedTemporaryPath))
+                    {
+                        throw new InvalidDataException("方向校正未生成输出视频。");
+                    }
+
+                    await using var normalizedValidationStream = new FileStream(
+                        normalizedTemporaryPath,
+                        FileMode.Open,
+                        FileAccess.Read,
+                        FileShare.Read,
+                        CopyBufferSize,
+                        FileOptions.SequentialScan);
+                    if (!MotionPhotoParser.IsValidMp4(normalizedValidationStream))
+                    {
+                        throw new InvalidDataException("方向校正后的视频结构校验失败。");
+                    }
+
+                    TryDeleteOwnedTemporaryFile(temporaryPath);
+                    temporaryPath = normalizedTemporaryPath;
+                    normalizedTemporaryPath = null;
+                }
+            }
+
             var sourceTimestamp = File.GetLastWriteTime(fullSourcePath);
             File.SetCreationTime(temporaryPath, sourceTimestamp);
             File.SetLastWriteTime(temporaryPath, sourceTimestamp);
@@ -126,7 +167,9 @@ public sealed class MotionPhotoExtractor
                 fullSourcePath,
                 outputPath,
                 ExtractionStatus.Success,
-                $"已导出：{Path.GetFileName(outputPath)}");
+                orientationNormalized
+                    ? $"已导出并校正方向：{Path.GetFileName(outputPath)}"
+                    : $"已无损导出：{Path.GetFileName(outputPath)}");
         }
         catch (OperationCanceledException)
         {
@@ -144,6 +187,11 @@ public sealed class MotionPhotoExtractor
             if (temporaryPath is not null)
             {
                 TryDeleteOwnedTemporaryFile(temporaryPath);
+            }
+
+            if (normalizedTemporaryPath is not null)
+            {
+                TryDeleteOwnedTemporaryFile(normalizedTemporaryPath);
             }
         }
     }

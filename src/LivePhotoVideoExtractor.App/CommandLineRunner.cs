@@ -14,7 +14,8 @@ public static class CommandLineRunner
         }
 
         var paths = arguments.Skip(1).ToArray();
-        var batch = new BatchExtractor(new MotionPhotoExtractor());
+        var batch = new BatchExtractor(
+            new MotionPhotoExtractor(new WindowsVideoOrientationNormalizer()));
         var results = await batch.ExtractAsync(paths).ConfigureAwait(false);
 
         if (results.Any(result => result.Status == ExtractionStatus.Failed))

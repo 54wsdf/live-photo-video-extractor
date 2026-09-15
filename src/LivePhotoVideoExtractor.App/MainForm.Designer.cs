@@ -98,7 +98,7 @@ partial class MainForm
         subtitleLabel.Font = new Font("Microsoft YaHei UI", 9F);
         subtitleLabel.ForeColor = Color.FromArgb(90, 101, 117);
         subtitleLabel.Location = new Point(2, 39);
-        subtitleLabel.Text = "无损提取安卓动态照片中的原始 MP4，不修改照片";
+        subtitleLabel.Text = "自动识别并校正视频方向，不修改照片";
 
         dropPanel.AccessibleName = "照片拖放区域";
         dropPanel.AllowDrop = true;
@@ -128,7 +128,7 @@ partial class MainForm
 
         dropHintLabel.Dock = DockStyle.Fill;
         dropHintLabel.ForeColor = Color.FromArgb(100, 116, 139);
-        dropHintLabel.Text = "支持多选 · 视频导出到照片同目录 · 已有文件绝不覆盖";
+        dropHintLabel.Text = "支持多选 · 自动校正横竖方向 · 已有文件绝不覆盖";
         dropHintLabel.TextAlign = ContentAlignment.MiddleCenter;
 
         selectPhotosButton.AccessibleName = "选择照片";
