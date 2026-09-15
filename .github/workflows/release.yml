@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build and upload
+        required: true
+        default: v1.0.0
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-upload:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.425
+
+      - name: Build and test standalone executable
+        shell: powershell
+        run: .\build-release.ps1
+
+      - name: Generate checksum
+        shell: powershell
+        run: |
+          $exe = '.\artifacts\publish\Live图转视频.exe'
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
+          "$hash *Live图转视频.exe" | Set-Content -LiteralPath '.\artifacts\publish\SHA256SUMS.txt' -Encoding ascii
+          Write-Host "EXE_SHA256=$hash"
+
+      - name: Upload release assets
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          gh release upload "${{ inputs.tag }}"
+          ".\artifacts\publish\Live图转视频.exe"
+          ".\artifacts\publish\SHA256SUMS.txt"
+          --repo "${{ github.repository }}"
