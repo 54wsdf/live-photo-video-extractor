@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore .\LivePhotoVideoExtractor.sln
+
+      - name: Test
+        run: dotnet test .\LivePhotoVideoExtractor.sln --configuration Release --no-restore
+
+      - name: Check vulnerable dependencies
+        run: dotnet list .\LivePhotoVideoExtractor.sln package --vulnerable --include-transitive
