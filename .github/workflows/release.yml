@@ -39,8 +39,10 @@ jobs:
         run: |
           $executables = @(Get-ChildItem -LiteralPath '.\artifacts\publish' -Filter '*.exe' -File)
           if ($executables.Count -ne 1) { throw "Expected one executable, found $($executables.Count)." }
-          $hash = (Get-FileHash -LiteralPath $executables[0].FullName -Algorithm SHA256).Hash
-          "$hash *$($executables[0].Name)" | Set-Content -LiteralPath '.\artifacts\publish\SHA256SUMS.txt' -Encoding utf8
+          $releaseExe = '.\artifacts\publish\LivePhotoVideoExtractor.exe'
+          Copy-Item -LiteralPath $executables[0].FullName -Destination $releaseExe
+          $hash = (Get-FileHash -LiteralPath $releaseExe -Algorithm SHA256).Hash
+          "$hash *LivePhotoVideoExtractor.exe" | Set-Content -LiteralPath '.\artifacts\publish\SHA256SUMS.txt' -Encoding ascii
           Write-Host "EXE_SHA256=$hash"
 
       - name: Upload release assets
@@ -48,7 +50,5 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $executables = @(Get-ChildItem -LiteralPath '.\artifacts\publish' -Filter '*.exe' -File)
-          if ($executables.Count -ne 1) { throw "Expected one executable, found $($executables.Count)." }
-          & gh.exe release upload "${{ inputs.tag }}" $executables[0].FullName '.\artifacts\publish\SHA256SUMS.txt' --repo "${{ github.repository }}"
+          & gh.exe release upload "${{ inputs.tag }}" '.\artifacts\publish\LivePhotoVideoExtractor.exe' '.\artifacts\publish\SHA256SUMS.txt' --repo "${{ github.repository }}"
           if ($LASTEXITCODE -ne 0) { throw "gh release upload failed with exit code $LASTEXITCODE." }

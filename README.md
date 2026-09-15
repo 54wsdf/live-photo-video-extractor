@@ -8,7 +8,7 @@
 
 ## 下载
 
-打开仓库右侧的 **Releases**，下载 `Live图转视频.exe`。该文件为 Windows 10/11 x64 自包含单文件程序，不需要安装 .NET。
+打开仓库右侧的 **Releases**，下载 `LivePhotoVideoExtractor.exe`。该文件为 Windows 10/11 x64 自包含单文件程序，不需要安装 .NET；启动后的应用名称仍为“Live 图转视频”。
 
 > 当前公开版本没有 Authenticode 数字签名。Windows SmartScreen 可能显示“未知发布者”；可在 Release 页面核对 SHA-256 后再运行。
 
